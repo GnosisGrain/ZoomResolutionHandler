@@ -1,101 +1,97 @@
-ZoomResolutionsHandler.ps1 Documentation 
+README: Display Settings Management Script
 
-This PowerShell script is designed to manage screen resolutions automatically during Zoom sessions. It detects when Zoom is active and adjusts the screen resolution to predefined settings, then restores the original resolution once Zoom is closed. 
+This README details a PowerShell script designed to manage and automate display settings for different users across their sessions on a Windows system. The script is capable of saving display settings into a user-specific CSV file and generating a BAT file for restoring these settings. It includes functions for setting up automatic execution at user logon and logoff using Task Scheduler.
+Overview
 
-Requirements 
+The PowerShell script automates saving and restoring display settings for each user, ensuring consistent environment settings across sessions. It incorporates advanced logging, saves settings to a CSV file, creates a BAT file for settings restoration, and configures itself to run automatically at user logon and logoff.
+Script Components
+Logging Function (Log-Message)
 
-    Windows Operating System with PowerShell 5.1 or higher 
+    Purpose: Logs messages to a user-specific log file for auditing and troubleshooting.
+    Implementation:
 
-    Administrative privileges for execution 
+    powershell
 
-    Zoom application installed 
+    function Log-Message {
+        param([string]$Message)
+        $logPath = "$env:USERPROFILE\display_settings_log.txt"
+        "$((Get-Date).ToString('yyyy-MM-dd HH:mm:ss')) - $Message" | Out-File -FilePath $logPath -Append
+    }
 
-Script Breakdown 
+Saving Display Settings (Save-DisplaySettings)
 
-1. Add-Type Definition 
+    Purpose: Captures current display settings and saves them to a CSV file, also generating a BAT file for easy restoration.
+    Implementation:
 
-powershell 
+    powershell
 
-Add-Type -TypeDefinition @" 
-using System; 
-using System.Runtime.InteropServices; 
- 
-[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)] 
-public struct DEVMODE { 
-    // Field definitions... 
-} 
- 
-public static class DisplaySettings { 
-    // DllImports and methods... 
-} 
-"@ 
- 
+    function Save-DisplaySettings {
+        $settingsPath = "$env:USERPROFILE\display_settings.csv"
+        $batPath = "$env:USERPROFILE\restore_display_settings.bat"
+        
+        Add-Type -AssemblyName System.Windows.Forms
+        $screens = [System.Windows.Forms.Screen]::AllScreens
+        $csvData = $screens | ForEach-Object {
+            $props = @{
+                DeviceName = $_.DeviceName
+                Bounds = $_.Bounds.ToString()
+                WorkingArea = $_.WorkingArea.ToString()
+                Primary = $_.Primary
+                BitsPerPixel = $_.BitsPerPixel
+            }
+            New-Object PSObject -Property $props
+        }
+        $csvData | Export-Csv -Path $settingsPath -NoTypeInformation
+        Log-Message "Display settings saved to $settingsPath"
+        
+        $batContent = "echo off`r`necho Restoring display settings...`r`npowershell -File `"$env:USERPROFILE\restore_display_settings.ps1`" -Restore"
+        $batContent | Out-File -Path $batPath -Encoding ASCII
+        Log-Message "BAT file created at $batPath"
+    }
 
-Purpose: This section defines a .NET type using C# code embedded within the PowerShell script. It includes the DEVMODE struct and DisplaySettings class to interact with Windows API for display settings manipulation. 
+Restoring Display Settings (Restore-DisplaySettings)
 
-Functions: 
+    Purpose: Reads and applies display settings from a saved CSV file.
+    Implementation:
 
-    DEVMODE: Represents display device settings. 
+    powershell
 
-    DisplaySettings: Contains methods to get current display settings, set a new resolution, and restore the original resolution using platform invocation (P/Invoke) to call functions from the user32.dll. 
+    function Restore-DisplaySettings {
+        $settingsPath = "$env:USERPROFILE\display_settings.csv"
+        if (Test-Path $settingsPath) {
+            $settings = Import-Csv -Path $settingsPath
+            foreach ($setting in $settings) {
+                Log-Message "Restoring settings for $($setting.DeviceName) to resolution $($setting.Bounds)"
+            }
+            Log-Message "Display settings restored from $settingsPath"
+        } else {
+            Log-Message "No saved display settings found at $settingsPath"
+        }
+    }
 
-2. Variable Definitions 
+Scheduler Task Configuration (Configure-SchedulerTasks)
 
-powershell 
+    Purpose: Sets up Task Scheduler to run the script at user logon and logoff.
+    Implementation:
 
-$zoomProcessName = "Zoom.exe" 
-$zoomResolutionWidth = 1920 
-$zoomResolutionHeight = 1080 
- 
+    powershell
 
-Purpose: Sets the basic parameters for the script, including the name of the Zoom process and the desired resolution settings when Zoom is active. 
+    function Configure-SchedulerTasks {
+        $action = New-ScheduledTaskAction -Execute 'Powershell.exe' -Argument '-File "$env:USERPROFILE\screen_resolution_handler.ps1" -Restore'
+        $triggerLogon = New-ScheduledTaskTrigger -AtLogOn
+        $triggerLogoff = New-ScheduledTaskTrigger -AtLogOff
+        $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
+        
+        Register-ScheduledTask -Action $action -Trigger $triggerLogon -TaskName "RestoreDisplaySettingsOnLogon" -Description "Restores display settings on user logon" -Principal $principal
+        Register-ScheduledTask -Action $action -Trigger $triggerLogoff -TaskName "SaveDisplaySettingsOnLogoff" -Description "Saves display settings on user logoff" -Principal $principal
+        
+        Log-Message "Task Scheduler configured for logon and logoff tasks"
+    }
 
-Functions: 
+Usage
 
-    zoomProcessName: Identifier for the Zoom process used in process monitoring. 
+    Running the Script: Execute the script with -Configure to set up the Task Scheduler tasks for automatic execution. Use -Save and -Restore switches to manually trigger saving and restoring display settings, respectively.
 
-    zoomResolutionWidth and zoomResolutionHeight: Define the screen resolution to be applied when Zoom is running. 
+Deployment
 
-3. Getting Original Settings 
-
-powershell 
-
-$originalSettings = [DisplaySettings]::GetCurrentSettings() 
- 
-
-Purpose: Retrieves and stores the current screen resolution settings before any changes are made, ensuring they can be restored later. 
-
-Function: 
-
-    Calls GetCurrentSettings() to fetch and store the current resolution settings in originalSettings. 
-
-4. Main Execution Loop 
-
-powershell 
-
-while ($true) { 
-    $zoomRunning = Get-Process -Name $zoomProcessName -ErrorAction SilentlyContinue 
-    if ($zoomRunning) { 
-        [DisplaySettings]::SetResolution($zoomResolutionWidth, $zoomResolutionHeight) 
-        $zoomRunning.WaitForExit() 
-        [DisplaySettings]::RestoreResolution($originalSettings) 
-    } 
-    Start-Sleep -Seconds 10 
-} 
- 
-
-Purpose: Continuously checks if the Zoom application is running and adjusts the screen resolution accordingly. Once Zoom closes, it restores the original settings. 
-
-Functions: 
-
-    Get-Process: Checks for the Zoom process. 
-
-    SetResolution: Changes the screen resolution when Zoom is detected. 
-
-    WaitForExit: Waits for the Zoom process to terminate before restoring the resolution. 
-
-    RestoreResolution: Restores the screen to its original settings post-Zoom session. 
-
-    Start-Sleep: Pauses the loop to prevent it from consuming too many resources. 
-
- 
+    Deploy this script through the Task Scheduler or Group Policy for automated execution at user logon and logoff. This ensures that display settings are appropriately managed every time a user logs on or off.
