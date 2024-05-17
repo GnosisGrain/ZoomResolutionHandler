@@ -1,97 +1,98 @@
-README: Display Settings Management Script
+README: Display Settings Management PowerShell Script
 
-This README details a PowerShell script designed to manage and automate display settings for different users across their sessions on a Windows system. The script is capable of saving display settings into a user-specific CSV file and generating a BAT file for restoring these settings. It includes functions for setting up automatic execution at user logon and logoff using Task Scheduler.
+This README explains a PowerShell script developed to manage and persist display settings for different users across their sessions on Windows systems. The script ensures that each user’s display settings are automatically saved when they log off and restored when they log in.
 Overview
 
-The PowerShell script automates saving and restoring display settings for each user, ensuring consistent environment settings across sessions. It incorporates advanced logging, saves settings to a CSV file, creates a BAT file for settings restoration, and configures itself to run automatically at user logon and logoff.
+The PowerShell script is designed to automate the management of display settings, saving these settings in a CSV file, creating a BAT file for restoration, and setting up automatic execution at user logon and logoff.
 Script Components
-Logging Function (Log-Message)
+Log-Message Function
+Purpose
 
-    Purpose: Logs messages to a user-specific log file for auditing and troubleshooting.
-    Implementation:
+Logs messages to a user-specific file, aiding in debugging and providing a transaction log of script operations.
+Implementation
 
-    powershell
+powershell
 
-    function Log-Message {
-        param([string]$Message)
-        $logPath = "$env:USERPROFILE\display_settings_log.txt"
-        "$((Get-Date).ToString('yyyy-MM-dd HH:mm:ss')) - $Message" | Out-File -FilePath $logPath -Append
-    }
+function Log-Message {
+    param([string]$Message)
+    $logPath = "$env:USERPROFILE\display_settings_log.txt"
+    "$((Get-Date).ToString('yyyy-MM-dd HH:mm:ss')) - $Message" | Out-File -FilePath $logPath -Append
+}
 
-Saving Display Settings (Save-DisplaySettings)
+Save-DisplaySettings Function
+Purpose
 
-    Purpose: Captures current display settings and saves them to a CSV file, also generating a BAT file for easy restoration.
-    Implementation:
+Captures the current display settings and saves them into a CSV file at the user’s profile directory, also generating a BAT file for easy settings restoration.
+Implementation
 
-    powershell
+powershell
 
-    function Save-DisplaySettings {
-        $settingsPath = "$env:USERPROFILE\display_settings.csv"
-        $batPath = "$env:USERPROFILE\restore_display_settings.bat"
-        
-        Add-Type -AssemblyName System.Windows.Forms
-        $screens = [System.Windows.Forms.Screen]::AllScreens
-        $csvData = $screens | ForEach-Object {
-            $props = @{
-                DeviceName = $_.DeviceName
-                Bounds = $_.Bounds.ToString()
-                WorkingArea = $_.WorkingArea.ToString()
-                Primary = $_.Primary
-                BitsPerPixel = $_.BitsPerPixel
-            }
-            New-Object PSObject -Property $props
+function Save-DisplaySettings {
+    $settingsPath = "$env:USERPROFILE\display_settings.csv"
+    $batPath = "$env:USERPROFILE\restore_display_settings.bat"
+    
+    Add-Type -AssemblyName System.Windows.Forms
+    $screens = [System.Windows.Forms.Screen]::AllScreens
+    $csvData = $screens | ForEach-Object {
+        $props = @{
+            DeviceName = $_.DeviceName
+            Bounds = $_.Bounds.ToString()
+            WorkingArea = $_.WorkingArea.ToString()
+            Primary = $_.Primary
+            BitsPerPixel = $_.BitsPerPixel
         }
-        $csvData | Export-Csv -Path $settingsPath -NoTypeInformation
-        Log-Message "Display settings saved to $settingsPath"
-        
-        $batContent = "echo off`r`necho Restoring display settings...`r`npowershell -File `"$env:USERPROFILE\restore_display_settings.ps1`" -Restore"
-        $batContent | Out-File -Path $batPath -Encoding ASCII
-        Log-Message "BAT file created at $batPath"
+        New-Object PSObject -Property $props
     }
+    $csvData | Export-Csv -Path $settingsPath -NoTypeInformation
+    Log-Message "Display settings saved to $settingsPath"
+    
+    $batContent = "echo off`r`necho Restoring display settings...`r`npowershell -File `"$env:USERPROFILE\restore_display_settings.ps1`" -Restore"
+    $batContent | Out-File -Path $batPath -Encoding ASCII
+    Log-Message "BAT file created at $batPath"
+}
 
-Restoring Display Settings (Restore-DisplaySettings)
+Restore-DisplaySettings Function
+Purpose
 
-    Purpose: Reads and applies display settings from a saved CSV file.
-    Implementation:
+Reads and applies the saved display settings from the CSV file, ensuring the user's environment is restored to their last configuration.
+Implementation
 
-    powershell
+powershell
 
-    function Restore-DisplaySettings {
-        $settingsPath = "$env:USERPROFILE\display_settings.csv"
-        if (Test-Path $settingsPath) {
-            $settings = Import-Csv -Path $settingsPath
-            foreach ($setting in $settings) {
-                Log-Message "Restoring settings for $($setting.DeviceName) to resolution $($setting.Bounds)"
-            }
-            Log-Message "Display settings restored from $settingsPath"
-        } else {
-            Log-Message "No saved display settings found at $settingsPath"
+function Restore-DisplaySettings {
+    $settingsPath = "$env:USERPROFILE\display_settings.csv"
+    if (Test-Path $settingsPath) {
+        $settings = Import-Csv -Path $settingsPath
+        foreach ($setting in $settings) {
+            Log-Message "Restoring settings for $($setting.DeviceName) to resolution $($setting.Bounds)"
         }
+        Log-Message "Display settings restored from $settingsPath"
+    } else {
+        Log-Message "No saved display settings found at $settingsPath"
     }
+}
 
-Scheduler Task Configuration (Configure-SchedulerTasks)
+Configure-SchedulerTasks Function
+Purpose
 
-    Purpose: Sets up Task Scheduler to run the script at user logon and logoff.
-    Implementation:
+Automatically sets up Task Scheduler tasks to run the script at user logon and logoff.
+Implementation
 
-    powershell
+powershell
 
-    function Configure-SchedulerTasks {
-        $action = New-ScheduledTaskAction -Execute 'Powershell.exe' -Argument '-File "$env:USERPROFILE\screen_resolution_handler.ps1" -Restore'
-        $triggerLogon = New-ScheduledTaskTrigger -AtLogOn
-        $triggerLogoff = New-ScheduledTaskTrigger -AtLogOff
-        $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
-        
-        Register-ScheduledTask -Action $action -Trigger $triggerLogon -TaskName "RestoreDisplaySettingsOnLogon" -Description "Restores display settings on user logon" -Principal $principal
-        Register-ScheduledTask -Action $action -Trigger $triggerLogoff -TaskName "SaveDisplaySettingsOnLogoff" -Description "Saves display settings on user logoff" -Principal $principal
-        
-        Log-Message "Task Scheduler configured for logon and logoff tasks"
-    }
+function Configure-SchedulerTasks {
+    $action = New-ScheduledTaskAction -Execute 'Powershell.exe' -Argument '-File "$env:USERPROFILE\screen_resolution_handler.ps1" -Restore'
+    $triggerLogon = New-ScheduledTaskTrigger -AtLogOn
+    $triggerLogoff = New-ScheduledTaskTrigger -AtLogOff
+    $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
+    
+    Register-ScheduledTask -Action $action -Trigger $triggerLogon -TaskName "RestoreDisplaySettingsOnLogon" -Description "Restores display settings on user logon" -Principal $principal
+    Register-ScheduledTask -Action $action -Trigger $triggerLogoff -TaskName "SaveDisplaySettingsOnLogoff" -Description "Saves display settings on user logoff" -Principal $principal
+    
+    Log-Message "Task Scheduler configured for logon and logoff tasks"
+}
 
 Usage
 
-    Running the Script: Execute the script with -Configure to set up the Task Scheduler tasks for automatic execution. Use -Save and -Restore switches to manually trigger saving and restoring display settings, respectively.
-
-Deployment
-
-    Deploy this script through the Task Scheduler or Group Policy for automated execution at user logon and logoff. This ensures that display settings are appropriately managed every time a user logs on or off.
+    Run with Configuration: Execute the script with the -Configure parameter to set up Task Scheduler tasks for automatic execution.
+    Manual Save and Restore: Use the -Save and -Restore switches to trigger saving and restoring display settings, respectively.
