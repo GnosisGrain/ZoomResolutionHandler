@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "PowerShell",
+            "request": "launch",
+            "name": "Launch Script",
+            "script": "C:\\Users\\Doc_M\\OneDrive\\Desktop\\RTC 2024 WINTER REPOS\\ZoomResolutionHandler\\screen_resolution_handlers.ps1",
+            "args": ["-Save"],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
