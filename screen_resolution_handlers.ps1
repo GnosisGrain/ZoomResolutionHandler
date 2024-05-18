@@ -22,6 +22,12 @@ function Show-Help {
 
 # Main script logic based on provided parameters
 try {
+    # Defaulting to Save if no parameters are provided
+    if (!$Save -and !$Restore -and !$Configure) {
+        $Save = $true
+        Log-Message "No operation specified. Defaulting to -Save."
+    }
+
     if ($Configure) {
         Log-Message "Configure operation selected."
         Configure-SchedulerTasks
@@ -42,20 +48,6 @@ try {
 }
 
 # Function definitions for saving and restoring settings (placeholders, replace with your actual functionality)
-function Save-DisplaySettings {
-    Log-Message "Functionality to save display settings goes here."
-}
-
-function Restore-DisplaySettings {
-    Log-Message "Functionality to restore display settings goes here."
-}
-
-function Configure-SchedulerTasks {
-    Log-Message "Functionality to configure scheduler tasks goes here."
-}
-
-
-# Function to save current display settings to a CSV and generate a BAT file to restore them
 function Save-DisplaySettings {
     $settingsPath = "$env:USERPROFILE\display_settings.csv"
     $batPath = "$env:USERPROFILE\restore_display_settings.bat"
@@ -80,7 +72,6 @@ function Save-DisplaySettings {
     Log-Message "BAT file created at $batPath"
 }
 
-# Function to restore display settings from the CSV
 function Restore-DisplaySettings {
     $settingsPath = "$env:USERPROFILE\display_settings.csv"
     if (Test-Path $settingsPath) {
@@ -94,32 +85,6 @@ function Restore-DisplaySettings {
     }
 }
 
-# Main script logic based on provided parameters
-try {
-    if ($Configure) {
-        Log-Message "Configure operation selected."
-        Configure-SchedulerTasks
-    } elseif ($Save) {
-        Log-Message "Save operation selected."
-        Save-DisplaySettings
-    } elseif ($Restore) {
-        Log-Message "Restore operation selected."
-        Restore-DisplaySettings
-    } else {
-        Log-Message "No valid operation specified. Use -Save to save settings, -Restore to restore settings, or -Configure to setup tasks."
-        Write-Host "Running help..."
-        Show-Help
-        # Optionally, you could provide a default behavior here instead of throwing an error
-        # throw "No valid operation specified."
-    }
-} catch {
-    Log-Message "An error occurred: $_"
-    throw
-}
-
-function Show-Help {
-    Write-Host "Help Information:"
-    Write-Host "Use -Save to save current display settings."
-    Write-Host "Use -Restore to restore display settings from a saved state."
-    Write-Host "Use -Configure to configure system tasks."
+function Configure-SchedulerTasks {
+    Log-Message "Functionality to configure scheduler tasks goes here."
 }
