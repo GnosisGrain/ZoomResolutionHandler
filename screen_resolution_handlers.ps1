@@ -1,5 +1,4 @@
 # Enhanced PowerShell script for managing display settings
-
 param(
     [switch]$Save,
     [switch]$Restore,
@@ -15,6 +14,7 @@ else {
     [System.IO.Path]::GetDirectoryName([Environment]::GetCommandLineArgs()[0])
 }
 
+# Function to write log messages to a file and console
 function Write-LogMessage {
     param([string]$Message)
     $logFile = Join-Path $scriptPath "display_settings_log.txt"
@@ -23,6 +23,7 @@ function Write-LogMessage {
     Write-Host "$($timestamp) - $($Message)"
 }
 
+# Function to show help information
 function Show-Help {
     Write-Host "Help Information:"
     Write-Host "Use -Save to save current display settings."
@@ -31,31 +32,56 @@ function Show-Help {
     Write-Host "Use -EntryNumber to specify an entry for restoration."
 }
 
+# Function to save display settings to CSV
 function Save-DisplaySettings {
     $csvFile = Join-Path $scriptPath "display_settings.csv"
     $batFile = Join-Path $scriptPath "restore_display_settings.bat"
     Add-Type -AssemblyName System.Windows.Forms
     $screens = [System.Windows.Forms.Screen]::AllScreens
+    
     $csvData = $screens | ForEach-Object {
         [PSCustomObject]@{
-            DeviceName   = $_.DeviceName
-            Bounds       = "$($_.Bounds.Width)x$($_.Bounds.Height)"
-            WorkingArea  = "$($_.WorkingArea.Width)x$($_.WorkingArea.Height)"
-            Primary      = $_.Primary
-            BitsPerPixel = $_.BitsPerPixel
+            DeviceName    = $_.DeviceName
+            DisplayIndex  = $_.Primary -replace 'True', '1' -replace 'False', '0'
+            Resolution    = "$($_.Bounds.Width)x$($_.Bounds.Height)"
+            WorkingArea   = "$($_.WorkingArea.Width)x$($_.WorkingArea.Height)"
+            Primary       = $_.Primary
+            BitsPerPixel  = $_.BitsPerPixel
+            Orientation   = $_.Bounds.Orientation  # Assuming orientation is accessible; adjust if not
+            RefreshRate   = $_.RefreshRate
+            PhysicalSize  = "$($_.PhysicalSize.Width)x$($_.PhysicalSize.Height)"
+            ScalingFactor = $_.ScalingFactor
         }
     }
+    
     $csvData | Export-Csv -Path $csvFile -NoTypeInformation
     Write-LogMessage "Display settings saved to $csvFile"
+
+    # Create or update BAT file to run with administrative privileges
     $batContent = @"
-echo off
-echo Restoring display settings...
-powershell -ExecutionPolicy Bypass -File `"$scriptPath\screen_resolution_handlers.ps1`" -Restore
+@echo off
+:: Elevate the batch process to run as administrator
+>nul 2>&1 "%SYSTEMROOT%\system32\cacls.exe" "%SYSTEMROOT%\system32\config\system"
+if '%errorlevel%' NEQ '0' (
+    echo Requesting administrative privileges...
+    goto UACPrompt
+) else ( goto gotAdmin )
+:UACPrompt
+    echo Set UAC = CreateObject("Shell.Application") > "%temp%\getadmin.vbs"
+    echo UAC.ShellExecute "%~s0", "", "", "runas", 1 >> "%temp%\getadmin.vbs"
+    "%temp%\getadmin.vbs"
+    exit /B
+:gotAdmin
+    if exist "%temp%\getadmin.vbs" ( del "%temp%\getadmin.vbs" )
+    cd /d "%~dp0"
+:: Start PowerShell with the Restore flag
+powershell -ExecutionPolicy Bypass -File "$scriptPath\screen_resolution_handlers.ps1" -Restore
 "@
     $batContent | Out-File -FilePath $batFile -Encoding ASCII
     Write-LogMessage "BAT file created at $batFile"
 }
 
+# Function to list and select settings from CSV for restoration
 function ListAndSelectSettings {
     $csvFile = Join-Path $scriptPath "display_settings.csv"
     if (Test-Path $csvFile) {
@@ -72,6 +98,7 @@ function ListAndSelectSettings {
     }
 }
 
+# Function to restore display settings from CSV
 function Restore-DisplaySettings {
     param([int]$entryIndex)
     $csvFile = Join-Path $scriptPath "display_settings.csv"
@@ -80,7 +107,7 @@ function Restore-DisplaySettings {
         if ($entryIndex -ge 0 -and $entryIndex -lt $settings.Count) {
             $selectedSetting = $settings[$entryIndex]
             Write-LogMessage "Restoring settings for $($selectedSetting.DeviceName) to resolution $($selectedSetting.Bounds)"
-            # Placeholder: insert the command to actually apply these settings
+            # Placeholder: insert the command to actually apply these settings, possibly using a utility or script
         }
         else {
             Write-LogMessage "Invalid entry number."
