@@ -1,5 +1,3 @@
-README: Display Settings Management PowerShell Script
-
 This README explains a PowerShell script developed to manage and persist display settings for different users across their sessions on Windows systems. The script ensures that each user’s display settings are automatically saved when they log off and restored when they log in.
 Overview
 
@@ -96,3 +94,73 @@ Usage
 
     Run with Configuration: Execute the script with the -Configure parameter to set up Task Scheduler tasks for automatic execution.
     Manual Save and Restore: Use the -Save and -Restore switches to trigger saving and restoring display settings, respectively.
+
+Example Commands
+
+    Save Current Display Settings:
+
+    powershell
+
+.\screen_resolution_handlers.ps1 -Save
+
+Restore Display Settings:
+
+powershell
+
+.\screen_resolution_handlers.ps1 -Restore -EntryNumber 0
+
+Configure System Tasks:
+
+powershell
+
+    .\screen_resolution_handlers.ps1 -Configure
+
+Batch File
+
+To make the script directory agnostic, use the following batch file:
+
+batch
+
+@echo off
+setlocal enabledelayedexpansion
+
+:: Define the path to the PowerShell script and CSV file using the directory of the batch file
+set scriptPath=%~dp0
+set csvFile=%scriptPath%\display_settings.csv
+
+:: Check if the CSV file exists
+if not exist "%csvFile%" (
+    echo No saved display settings found.
+    pause
+    exit /b
+)
+
+:: List all saved display settings
+echo Saved display settings:
+set index=0
+for /f "tokens=* delims=" %%i in ('powershell -Command "Import-Csv -Path ''%csvFile%'' | ForEach-Object { ''!index! - $($_.DeviceName), $($_.Bounds), Primary: $($_.Primary)''; $global:index++ }"') do (
+    echo %%i
+    set /a index+=1
+)
+
+:: Prompt the user to select a setting
+set /p selectedIndex=Enter the number of the setting to restore:
+
+:: Validate the input
+set validInput=0
+for /l %%i in (0,1,!index!) do (
+    if "!selectedIndex!"=="%%i" (
+        set validInput=1
+    )
+)
+
+if "!validInput!"=="0" (
+    echo Invalid selection.
+    pause
+    exit /b
+)
+
+:: Restore the selected display setting
+echo Restoring display settings...
+powershell -ExecutionPolicy Bypass -File "%scriptPath%\screen_resolution_handlers.ps1" -Restore -EntryNumber !selectedIndex!
+pause
