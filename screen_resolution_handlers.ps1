@@ -6,12 +6,7 @@ param(
 )
 
 # Determine the script directory
-$scriptPath = if ($MyInvocation.MyCommand.CommandType -eq 'ExternalScript') {
-    Split-Path -Parent -Path $MyInvocation.MyCommand.Definition
-}
-else {
-    [System.IO.Path]::GetDirectoryName([Environment]::GetCommandLineArgs()[0])
-}
+$scriptPath = $PSScriptRoot
 
 function Write-LogMessage {
     param([string]$Message)
@@ -34,21 +29,30 @@ function Save-DisplaySettings {
     $batFile = Join-Path $scriptPath "restore_display_settings.bat"
     Add-Type -AssemblyName System.Windows.Forms
     $screens = [System.Windows.Forms.Screen]::AllScreens
-    
+
     # Read existing CSV data
     $existingData = @()
     if (Test-Path $csvFile) {
         $existingData = Import-Csv -Path $csvFile
+        $existingColumns = $existingData[0].PSObject.Properties.Name
     }
-    
+
     $csvData = $screens | ForEach-Object {
-        [PSCustomObject]@{
+        $obj = [PSCustomObject]@{
             DeviceName   = $_.DeviceName
             Bounds       = "$($_.Bounds.Width)x$($_.Bounds.Height)"
             WorkingArea  = "$($_.WorkingArea.Width)x$($_.WorkingArea.Height)"
             Primary      = $_.Primary
             BitsPerPixel = $_.BitsPerPixel
         }
+        if ($existingColumns) {
+            foreach ($column in $existingColumns) {
+                if (-not $obj.PSObject.Properties[$column]) {
+                    $obj | Add-Member -MemberType NoteProperty -Name $column -Value $null
+                }
+            }
+        }
+        $obj
     }
 
     # Check if the current settings already exist
@@ -61,23 +65,24 @@ function Save-DisplaySettings {
     }
 
     if (-not $settingsExist) {
-        $csvData | Export-Csv -Path $csvFile -NoTypeInformation -Append
+        $csvData | Export-Csv -Path $csvFile -NoTypeInformation -Append -Force
         Write-LogMessage "Display settings saved to $csvFile"
-    } else {
+    }
+    else {
         Write-LogMessage "Current display settings already exist in $csvFile"
     }
-    
+
     # Assign unique entry number to each setting in the BAT file
     $batContent = @()
     $batContent += "echo off"
     $batContent += "echo Restoring display settings..."
     $entryIndex = 0
     foreach ($screen in $existingData + $csvData) {
-        $batContent += "echo Setting $entryIndex: $($screen.DeviceName), $($screen.Bounds), Primary: $($screen.Primary)"
+        $batContent += "echo Setting ${entryIndex}: $($screen.DeviceName), $($screen.Bounds), Primary: $($screen.Primary)"
         $entryIndex++
     }
     $batContent += "powershell -ExecutionPolicy Bypass -File `"$scriptPath\screen_resolution_handlers.ps1`" -Restore"
-    
+
     $batContent | Out-File -FilePath $batFile -Encoding ASCII
     Write-LogMessage "BAT file created at $batFile"
 }
@@ -113,7 +118,7 @@ function Restore-DisplaySettings {
         }
     }
     else {
-        Write-LogMessage "No saved display settings found."
+        Write-Host "No saved display settings found."
     }
 }
 
