@@ -1,12 +1,35 @@
 {
     "version": "0.2.0",
     "configurations": [
+        
         {
+            "name": "Save Display Settings",
             "type": "PowerShell",
             "request": "launch",
-            "name": "Launch Script",
-            "script": "C:\\Users\\Doc_M\\OneDrive\\Desktop\\RTC 2024 WINTER REPOS\\ZoomResolutionHandler\\screen_resolution_handlers.ps1",
-            "args": ["-Save"],
+            "script": "${workspaceFolder}\\screen_resolution_handlers.ps1",
+            "args": [
+                "-Save"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Restore Display Settings",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${workspaceFolder}\\screen_resolution_handlers.ps1",
+            "args": [
+                "-Restore",
+                "-EntryNumber",
+                "0" // Default entry number, can be changed as needed
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Launch BAT File",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${workspaceFolder}\\launch_bat_file.ps1",
+            "args": [],
             "cwd": "${workspaceFolder}"
         }
     ]
